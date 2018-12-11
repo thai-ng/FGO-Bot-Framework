@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <sstream>
 #include <iostream>
+#include <chrono>
+#include <string_view>
 
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
@@ -15,8 +17,8 @@ constexpr double ServantWidthFactor = 1 / 4.0;
 constexpr double ClassWidthFactor = 7 / 20.0;
 constexpr double ClassHeightFactor = 2 / 7.0;
 
-enum class ServantClass {
-	Saber,
+enum class ServantClass : int {
+	Saber = 0,
 	Archer,
 	Lancer,
 	Rider,
@@ -55,14 +57,18 @@ cv::Mat OpenTemplate(std::string_view templateName) {
 	return templ;
 }
 
+template <typename T>
+constexpr auto BaseVal(T t) {
+	return static_cast<typename std::underlying_type_t<T>>(t);
+}
+
 class Servant{
 public:
 	Servant() {}
 
-	Servant(cv::Mat inputMat, std::string n) :
-		name(std::move(n)),
+	Servant(cv::Mat inputMat, std::array<cv::Mat, 3> const& templates) :
 		sourceImage(std::move(inputMat)),
-		servantClass(GetServantClass(*this))
+		servantClass(GetServantClass(*this, templates))
 	{
 	}
 
@@ -78,30 +84,21 @@ public:
 		cv::rectangle(sourceImage, classRect, redBrush);
 	}
 
-	void show() const {
-		cv::namedWindow(name);
-		cv::imshow(name, sourceImage);
-	}
-
-	static ServantClass GetServantClass(Servant const& servant) {
+	static ServantClass GetServantClass(Servant const& servant, std::array<cv::Mat, 3> const& templates) {
 		auto classArea = servant.getClassArea();
 
-		if (CheckTemplate(classArea, OpenTemplate("templates/caster.png")))
-			return ServantClass::Caster;
-		else if (CheckTemplate(classArea, OpenTemplate("templates/archer.png")))
-			return ServantClass::Archer;
-		else if (CheckTemplate(classArea, OpenTemplate("templates/lancer.png")))
-			return ServantClass::Lancer;
-		else
-			return ServantClass::Unknown;
+		// TODO(Thai): Figure out how to tie this to the array. 
+		// Maybe build the image along with the binary for constexpr array?
+		for (auto i = 0; i < BaseVal(ServantClass::Unknown); ++i) {
+			if (CheckTemplate(classArea, templates[i]))
+				return static_cast<ServantClass>(i);
+		}
+
+		return ServantClass::Unknown;
 	}
 
 	ServantClass Class() const {
 		return servantClass;
-	}
-
-	std::string const& Name() const {
-		return name;
 	}
 
 private:
@@ -120,7 +117,6 @@ private:
 		return cv::Mat(sourceImage, classRect);
 	}
 
-	std::string name;
 	cv::Mat sourceImage;
 	ServantClass servantClass;
 };
@@ -128,11 +124,19 @@ private:
 int main() {
 	auto scene = cv::imread("scene.jpg");
 	cv::resize(scene, scene, cv::Size(scene.cols / ResizeFactor, scene.rows / ResizeFactor));
+	std::array<cv::Mat, 3> templates =
+	{
+		OpenTemplate("templates/caster.png"),
+		OpenTemplate("templates/archer.png"),
+		OpenTemplate("templates/lancer.png")
+	};
+
+	auto startTime = std::chrono::steady_clock::now();
 	auto sceneWidth = scene.cols;
 
 	auto margin = scene.cols / MarginFactor;
 	auto servantWidth = static_cast<int>(sceneWidth * ServantWidthFactor);
-	
+
 	auto midHeight = scene.rows / 2;
 	auto height = scene.rows;
 
@@ -140,31 +144,34 @@ int main() {
 	int currentServantIndex = 0;
 	auto heightRange = cv::Range(midHeight, height);
 	std::generate(std::begin(servants), std::end(servants), [&] {
-		std::stringstream str;
-		str << "Servant " << currentServantIndex + 1;
 		cv::Rect servantRect{ margin + (currentServantIndex * servantWidth), midHeight, servantWidth, scene.rows / 2 };
 		++currentServantIndex;
-		return Servant(cv::Mat(scene, servantRect), str.str());
+		return Servant(cv::Mat(scene, servantRect), templates);
 	});
+
+	auto endTime = std::chrono::steady_clock::now();
 	
 	for (auto& servant : servants) {
 		auto servantClass = servant.Class();
 		servant.drawBorder();
 		servant.drawClassArea();
 		if (servantClass == ServantClass::Caster) {
-			std::cout << servant.Name() << " Class: Caster\n";
+			std::cout << "Class: Caster\n";
 		}
 		else if (servantClass == ServantClass::Lancer) {
-			std::cout << servant.Name() << " Class: Lancer\n";
+			std::cout << "Class: Lancer\n";
 		}
 		else if (servantClass == ServantClass::Archer) {
-			std::cout << servant.Name() << " Class: Archer\n";
+			std::cout << "Class: Archer\n";
 		}
 		else {
-			std::cout << servant.Name() << " Class: Unknown\n";
+			std::cout << "Class: Unknown\n";
 		}
 	}
 
+	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+	std::cout << "Took " << elapsed.count() << "ms\n";
+	
 	cv::namedWindow("scene");
 	cv::imshow("scene", scene);
 
