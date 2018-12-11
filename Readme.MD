@@ -1,10 +1,16 @@
 # This is a bot framework for Fate Grand Order.
 ## Roadmap:
 1. Detect Servants present in battle scene.
-2. Build set of coordinates for servant skills
+2. Select servant skills
 3. Detect cards in card selection scene
-4. Build set of coordinates for cards
-5. Build scripting framework for scripting battle actions
+4. Select cards
+5. Detect suit skills
+6. Select suit skills
+7. Detect NP cards
+8. Select NP cards
+9. Build scripting framework for scripting battle actions
+10. Build Android App that consumes this framework.
+11. Explore outside of battle scripting
 
 ## TODOs:
 ### Build coordinate primitives:
