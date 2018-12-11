@@ -4,6 +4,7 @@
 #include <iostream>
 #include <chrono>
 #include <string_view>
+#include <numeric>
 
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
@@ -118,6 +119,7 @@ private:
 int main() {
 	auto scene = cv::imread("scene.jpg");
 	cv::resize(scene, scene, cv::Size(scene.cols / ResizeFactor, scene.rows / ResizeFactor));
+
 	std::array<cv::Mat, 3> templates =
 	{
 		OpenTemplate("templates/caster.png"),
@@ -125,50 +127,38 @@ int main() {
 		OpenTemplate("templates/lancer.png")
 	};
 
-	auto startTime = std::chrono::steady_clock::now();
-	auto sceneWidth = scene.cols;
+	std::array<std::chrono::nanoseconds, 10> times;
+	std::generate(std::begin(times), std::end(times), [&] {
+		auto startTime = std::chrono::steady_clock::now();
 
-	auto margin = scene.cols / MarginFactor;
-	auto servantWidth = static_cast<int>(sceneWidth * ServantWidthFactor);
+		auto sceneWidth = scene.cols;
+		auto margin = sceneWidth / MarginFactor;
+		auto servantWidth = static_cast<int>(sceneWidth * ServantWidthFactor);
 
-	auto midHeight = scene.rows / 2;
-	auto height = scene.rows;
+		auto sceneHeight = scene.rows;
+		auto servantHeight = sceneHeight / 2;
 
-	std::array<Servant, 3> servants;
-	int currentServantIndex = 0;
-	auto heightRange = cv::Range(midHeight, height);
-	std::generate(std::begin(servants), std::end(servants), [&] {
-		cv::Rect servantRect{ margin + (currentServantIndex * servantWidth), midHeight, servantWidth, scene.rows / 2 };
-		++currentServantIndex;
-		return Servant(cv::Mat(scene, servantRect), templates);
+		std::array<Servant, 3> servants;
+		int currentServant = 0;
+		std::generate(std::begin(servants), std::end(servants), [&] {
+			cv::Rect servantRect{ margin + (currentServant++ * servantWidth), // left
+								  servantHeight, // top
+								  servantWidth, // width
+								  servantHeight // height
+								};
+			return Servant(cv::Mat(scene, servantRect), templates);
+		});
+
+		auto endTime = std::chrono::steady_clock::now();
+		return std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - startTime);
 	});
 
-	auto endTime = std::chrono::steady_clock::now();
-	
-	for (auto& servant : servants) {
-		auto servantClass = servant.Class();
-		servant.drawBorder();
-		servant.drawClassArea();
-		if (servantClass == ServantClass::Caster) {
-			std::cout << "Class: Caster\n";
-		}
-		else if (servantClass == ServantClass::Lancer) {
-			std::cout << "Class: Lancer\n";
-		}
-		else if (servantClass == ServantClass::Archer) {
-			std::cout << "Class: Archer\n";
-		}
-		else {
-			std::cout << "Class: Unknown\n";
-		}
+	for (auto t : times) {
+		std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(t).count() << "ms\n";
 	}
 
-	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
-	std::cout << "Took " << elapsed.count() << "ms\n";
-	
-	cv::namedWindow("scene");
-	cv::imshow("scene", scene);
+	auto total = std::accumulate(std::begin(times), std::end(times), std::chrono::nanoseconds(0));
+	std::cout << "Avg: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::nanoseconds(total.count() / 10)).count() << "ms\n";
 
-	cv::waitKey(0);
 	return 0;
 }
