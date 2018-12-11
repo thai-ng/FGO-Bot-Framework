@@ -33,7 +33,7 @@ enum class ServantClass : int {
 	Unknown
 };
 
-bool CheckTemplate(cv::Mat& image, cv::Mat const& templ) {
+bool CheckTemplate(cv::Mat const& image, cv::Mat const& templ) {
 	auto resultCols = image.cols - templ.cols + 1;
 	auto resultRows = image.rows - templ.rows + 1;
 	cv::Mat result{ cv::Size(resultCols, resultRows), CV_32FC1 };
@@ -42,13 +42,7 @@ bool CheckTemplate(cv::Mat& image, cv::Mat const& templ) {
 	double minVal; double maxVal; cv::Point minLoc; cv::Point maxLoc;
 	cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc, cv::Mat());
 
-	if (maxVal > 0.9) {
-		cv::Rect resultRect{ maxLoc, cv::Point{maxLoc.x + templ.cols, maxLoc.y + templ.rows} };
-		cv::rectangle(image, resultRect, cv::Scalar{ 0, 0, 255 });
-		return true;
-	}
-
-	return false;
+	return (maxVal > 0.9);
 }
 
 cv::Mat OpenTemplate(std::string_view templateName) {
